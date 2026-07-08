@@ -1,663 +1,306 @@
--- // UILib v3 — Modern Drawing‑based UI для Roblox эксплоитов
-local UILib = {}
-local UserInputService = game:GetService("UserInputService")
-local RunService = game:GetService("RunService")
+-- UILibrary.lua
+local Library = {}
+Library.__index = Library
 
--- Глобальный массив активных окон для корректного удаления
-local activeWindows = {}
-
------------------------------------------------------------
--- Вспомогательные функции
------------------------------------------------------------
-local function isInRect(point, rectPos, rectSize)
-	return point.X >= rectPos.X and point.X <= rectPos.X + rectSize.X and
-		point.Y >= rectPos.Y and point.Y <= rectPos.Y + rectSize.Y
+-- Создание главного GUI
+function Library.new(title)
+    local self = setmetatable({}, Library)
+    self.gui = Instance.new("ScreenGui")
+    self.gui.Name = "MainGUI"
+    self.gui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+    
+    self.mainFrame = Instance.new("Frame")
+    self.mainFrame.Size = UDim2.new(0, 400, 0, 300)
+    self.mainFrame.Position = UDim2.new(0.5, -200, 0.5, -150)
+    self.mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    self.mainFrame.BackgroundTransparency = 0.1
+    self.mainFrame.BorderSizePixel = 1
+    self.mainFrame.BorderColor3 = Color3.fromRGB(0, 170, 255)
+    self.mainFrame.Parent = self.gui
+    
+    -- Заголовок
+    local titleLabel = Instance.new("TextLabel")
+    titleLabel.Size = UDim2.new(1, 0, 0, 30)
+    titleLabel.Position = UDim2.new(0, 0, 0, 0)
+    titleLabel.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+    titleLabel.BackgroundTransparency = 0
+    titleLabel.BorderSizePixel = 0
+    titleLabel.Text = title or "UI Library"
+    titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    titleLabel.TextScaled = true
+    titleLabel.Font = Enum.Font.SourceSansBold
+    titleLabel.Parent = self.mainFrame
+    
+    -- Кнопка закрытия
+    local closeBtn = Instance.new("TextButton")
+    closeBtn.Size = UDim2.new(0, 30, 0, 30)
+    closeBtn.Position = UDim2.new(1, -30, 0, 0)
+    closeBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+    closeBtn.Text = "X"
+    closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    closeBtn.TextScaled = true
+    closeBtn.Font = Enum.Font.SourceSansBold
+    closeBtn.Parent = self.mainFrame
+    closeBtn.MouseButton1Click:Connect(function()
+        self.gui:Destroy()
+    end)
+    
+    -- Контейнер для вкладок и содержимого
+    self.tabsContainer = Instance.new("Frame")
+    self.tabsContainer.Size = UDim2.new(0, 100, 1, -30)
+    self.tabsContainer.Position = UDim2.new(0, 0, 0, 30)
+    self.tabsContainer.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+    self.tabsContainer.BackgroundTransparency = 0
+    self.tabsContainer.BorderSizePixel = 0
+    self.tabsContainer.Parent = self.mainFrame
+    
+    self.contentContainer = Instance.new("ScrollingFrame")
+    self.contentContainer.Size = UDim2.new(1, -100, 1, -30)
+    self.contentContainer.Position = UDim2.new(0, 100, 0, 30)
+    self.contentContainer.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    self.contentContainer.BackgroundTransparency = 0
+    self.contentContainer.BorderSizePixel = 0
+    self.contentContainer.Parent = self.mainFrame
+    self.contentContainer.CanvasSize = UDim2.new(0, 0, 0, 0)
+    self.contentContainer.ScrollBarThickness = 6
+    self.contentContainer.ScrollBarImageColor3 = Color3.fromRGB(0, 170, 255)
+    
+    self.tabs = {}
+    self.currentTab = nil
+    self.elements = {}
+    
+    return self
 end
 
--- HSV -> Color3 (H: 0-360, S: 0-1, V: 0-1)
-local function hsvToColor3(h, s, v)
-	local r, g, b
-	local i = math.floor(h / 60) % 6
-	local f = h / 60 - math.floor(h / 60)
-	local p = v * (1 - s)
-	local q = v * (1 - f * s)
-	local t = v * (1 - (1 - f) * s)
-	if i == 0 then r, g, b = v, t, p
-	elseif i == 1 then r, g, b = q, v, p
-	elseif i == 2 then r, g, b = p, v, t
-	elseif i == 3 then r, g, b = p, q, v
-	elseif i == 4 then r, g, b = t, p, v
-	else r, g, b = v, p, q
-	end
-	return Color3.new(r, g, b)
+-- Добавление вкладки
+function Library:AddTab(name)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, -10, 0, 30)
+    btn.Position = UDim2.new(0, 5, 0, #self.tabs * 35 + 5)
+    btn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    btn.Text = name
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.TextScaled = true
+    btn.Font = Enum.Font.SourceSans
+    btn.BorderSizePixel = 1
+    btn.BorderColor3 = Color3.fromRGB(0, 170, 255)
+    btn.Parent = self.tabsContainer
+    
+    local content = Instance.new("Frame")
+    content.Size = UDim2.new(1, -10, 1, -10)
+    content.Position = UDim2.new(0, 5, 0, 5)
+    content.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    content.BackgroundTransparency = 1
+    content.BorderSizePixel = 0
+    content.Parent = self.contentContainer
+    content.Visible = false
+    
+    self.tabs[name] = {button = btn, content = content, elements = {}}
+    
+    btn.MouseButton1Click:Connect(function()
+        self:SelectTab(name)
+    end)
+    
+    if not self.currentTab then
+        self:SelectTab(name)
+    end
+    
+    return self.tabs[name]
 end
 
------------------------------------------------------------
--- Конструктор окна
------------------------------------------------------------
-function UILib:CreateWindow(config)
-	config = config or {}
-	local name = config.Name or "Window"
-	local basePos = config.Position or Vector2.new(200, 200)
-	local size = config.Size or Vector2.new(500, 400)
-	local objects = {}       -- все Drawing‑объекты окна
-	local elements = {}      -- интерактивные элементы (кнопки, слайдеры…)
-	local tabs = {}          -- вкладки { name, container (список элементов), active }
-	local activeTab = nil
-	local dragging = false
-	local dragOffset = Vector2.zero
-	local mouse = Vector2.zero
-	local mouseDown = false
-
-	-- Отслеживание мыши
-	UserInputService.InputChanged:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseMovement then
-			mouse = Vector2.new(input.Position.X, input.Position.Y)
-		end
-	end)
-
-	-- Фон окна
-	local bg = Drawing.new("Square")
-	bg.Color = Color3.fromRGB(25, 25, 25)
-	bg.Size = size
-	bg.Filled = true
-	bg.Visible = true
-	table.insert(objects, bg)
-
-	-- Заголовок
-	local titleBar = Drawing.new("Square")
-	titleBar.Color = Color3.fromRGB(40, 40, 40)
-	titleBar.Size = Vector2.new(size.X, 30)
-	titleBar.Filled = true
-	titleBar.Visible = true
-	table.insert(objects, titleBar)
-
-	local titleText = Drawing.new("Text")
-	titleText.Text = name
-	titleText.Color = Color3.fromRGB(255, 255, 255)
-	titleText.Size = 16
-	titleText.Center = false
-	titleText.Visible = true
-	table.insert(objects, titleText)
-
-	-- Кнопка закрытия
-	local closeBtn = Drawing.new("Square")
-	closeBtn.Color = Color3.fromRGB(180, 40, 40)
-	closeBtn.Size = Vector2.new(25, 25)
-	closeBtn.Filled = true
-	closeBtn.Visible = true
-	table.insert(objects, closeBtn)
-
-	local closeText = Drawing.new("Text")
-	closeText.Text = "✕"
-	closeText.Color = Color3.fromRGB(255, 255, 255)
-	closeText.Size = 18
-	closeText.Center = true
-	closeText.Visible = true
-	table.insert(objects, closeText)
-
-	-- Линия под заголовком
-	local headerLine = Drawing.new("Line")
-	headerLine.Color = Color3.fromRGB(60, 60, 60)
-	headerLine.Thickness = 1
-	headerLine.Visible = true
-	table.insert(objects, headerLine)
-
-	-- Функция обновления абсолютных позиций ВСЕХ объектов
-	local function updateAllPositions()
-		-- Фон и заголовок
-		bg.Position = basePos
-		titleBar.Position = basePos
-		titleText.Position = basePos + Vector2.new(8, 5)
-		closeBtn.Position = basePos + Vector2.new(size.X - 25, 0)
-		closeText.Position = basePos + Vector2.new(size.X - 12, 5)
-		headerLine.From = basePos + Vector2.new(0, 30)
-		headerLine.To = basePos + Vector2.new(size.X, 30)
-
-		-- Элементы во вкладках
-		local yOffset = 40 -- начальный отступ под заголовком
-		for _, tab in ipairs(tabs) do
-			if tab == activeTab then
-				for _, elem in ipairs(tab.elements) do
-					elem:UpdatePosition(basePos + Vector2.new(10, yOffset))
-					yOffset = yOffset + elem:GetHeight() + 6
-				end
-			end
-		end
-	end
-
-	-- Функция перерисовки видимости вкладок
-	local function refreshTabVisibility()
-		for _, tab in ipairs(tabs) do
-			for _, elem in ipairs(tab.elements) do
-				elem:SetVisible(tab == activeTab)
-			end
-		end
-		updateAllPositions()
-	end
-
-	-- Главный цикл обработки ввода
-	local connection
-	connection = RunService.RenderStepped:Connect(function()
-		local currentMouseDown = UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1)
-		local clicked = currentMouseDown and not mouseDown
-		local released = not currentMouseDown and mouseDown
-
-		-- Перетаскивание окна
-		if clicked and isInRect(mouse, basePos, Vector2.new(size.X, 30)) then
-			dragging = true
-			dragOffset = basePos - mouse
-		end
-		if dragging and currentMouseDown then
-			basePos = mouse + dragOffset
-			updateAllPositions()
-		else
-			dragging = false
-		end
-
-		-- Обработка элементов активной вкладки
-		if activeTab then
-			for _, elem in ipairs(activeTab.elements) do
-				elem:ProcessInput(mouse, currentMouseDown, clicked, released)
-			end
-		end
-
-		-- Закрытие окна по кнопке
-		if clicked and isInRect(mouse, basePos + Vector2.new(size.X - 25, 0), Vector2.new(25, 25)) then
-			-- Удаляем все Drawing‑объекты
-			for _, obj in ipairs(objects) do
-				obj:Remove()
-			end
-			for _, tab in ipairs(tabs) do
-				for _, elem in ipairs(tab.elements) do
-					elem:Destroy()
-				end
-			end
-			connection:Disconnect()
-			activeWindows[name] = nil
-			return
-		end
-
-		mouseDown = currentMouseDown
-	end)
-
-	-- Базовая позиция
-	updateAllPositions()
-
-	-- Объект окна
-	local windowObj = {
-		Name = name,
-		BasePos = basePos,
-		Size = size,
-		Objects = objects,
-		Tabs = tabs,
-	}
-
-	-----------------------------------------------------------
-	-- Методы окна
-	-----------------------------------------------------------
-
-	-- Добавление вкладки
-	function windowObj:CreateTab(tabName)
-		local tab = { name = tabName, elements = {} }
-		table.insert(tabs, tab)
-		if #tabs == 1 then
-			activeTab = tab -- автоматически активировать первую
-			refreshTabVisibility()
-		end
-		-- Кнопка вкладки рисуется отдельно в заголовке? Для упрощения реализуем переключение по клику на полоске вкладок сверху.
-		-- Пока просто возвращаем tab‑объект, пользователь сам добавит элементы.
-		return tab
-	end
-
-	-- Внутренний метод для добавления элемента в активную вкладку (по умолчанию последняя созданная)
-	function windowObj:AddElement(elem)
-		local targetTab = activeTab or tabs[1]
-		if not targetTab then
-			-- если нет вкладок, создаём одну по умолчанию
-			targetTab = windowObj:CreateTab("Main")
-		end
-		table.insert(targetTab.elements, elem)
-		-- Добавляем Drawing‑объекты элемента в общий пул
-		for _, d in ipairs(elem.Objects) do
-			table.insert(objects, d)
-		end
-		refreshTabVisibility()
-	end
-
-	-- Кнопка
-	function windowObj:CreateButton(text, callback)
-		local elem = {}
-		elem.Type = "Button"
-		elem.Width = size.X - 20
-		elem.Height = 30
-		elem.Objects = {}
-
-		local btn = Drawing.new("Square")
-		btn.Color = Color3.fromRGB(60, 60, 60)
-		btn.Size = Vector2.new(elem.Width, elem.Height)
-		btn.Filled = true
-		btn.Visible = true
-		table.insert(elem.Objects, btn)
-
-		local txt = Drawing.new("Text")
-		txt.Text = text
-		txt.Color = Color3.fromRGB(255, 255, 255)
-		txt.Size = 14
-		txt.Center = true
-		txt.Visible = true
-		table.insert(elem.Objects, txt)
-
-		elem.UpdatePosition = function(self, topLeft)
-			btn.Position = topLeft
-			txt.Position = topLeft + Vector2.new(self.Width/2, self.Height/2 - 7)
-		end
-		elem.GetHeight = function(self) return self.Height end
-		elem.SetVisible = function(self, vis)
-			btn.Visible = vis
-			txt.Visible = vis
-		end
-		elem.ProcessInput = function(self, mousePos, isDown, clicked, released)
-			if clicked and isInRect(mousePos, btn.Position, btn.Size) then
-				callback()
-			end
-		end
-		elem.Destroy = function(self)
-			for _, d in ipairs(self.Objects) do d:Remove() end
-		end
-
-		windowObj:AddElement(elem)
-		return elem
-	end
-
-	-- Тоггл (чекбокс)
-	function windowObj:CreateToggle(text, default, callback)
-		default = default or false
-		local elem = {}
-		elem.Type = "Toggle"
-		elem.Value = default
-		elem.Width = size.X - 20
-		elem.Height = 20
-		elem.Objects = {}
-
-		local box = Drawing.new("Square")
-		box.Color = default and Color3.fromRGB(100, 150, 255) or Color3.fromRGB(50, 50, 50)
-		box.Size = Vector2.new(16, 16)
-		box.Filled = true
-		box.Visible = true
-		table.insert(elem.Objects, box)
-
-		local label = Drawing.new("Text")
-		label.Text = text
-		label.Color = Color3.fromRGB(255, 255, 255)
-		label.Size = 14
-		label.Center = false
-		label.Visible = true
-		table.insert(elem.Objects, label)
-
-		elem.UpdatePosition = function(self, topLeft)
-			box.Position = topLeft
-			label.Position = topLeft + Vector2.new(20, -2)
-		end
-		elem.GetHeight = function(self) return self.Height end
-		elem.SetVisible = function(self, vis)
-			box.Visible = vis
-			label.Visible = vis
-		end
-		elem.ProcessInput = function(self, mousePos, isDown, clicked, released)
-			if clicked and (isInRect(mousePos, box.Position, box.Size) or isInRect(mousePos, label.Position, Vector2.new(label.TextBounds.X, label.TextBounds.Y))) then
-				self.Value = not self.Value
-				box.Color = self.Value and Color3.fromRGB(100, 150, 255) or Color3.fromRGB(50, 50, 50)
-				callback(self.Value)
-			end
-		end
-		elem.Destroy = function(self) for _, d in ipairs(self.Objects) do d:Remove() end end
-
-		windowObj:AddElement(elem)
-		return elem
-	end
-
-	-- Слайдер
-	function windowObj:CreateSlider(text, min, max, default, callback)
-		min = min or 0
-		max = max or 100
-		default = math.clamp(default or 0, min, max)
-		local elem = {}
-		elem.Type = "Slider"
-		elem.Value = default
-		elem.Min = min
-		elem.Max = max
-		elem.Width = size.X - 20
-		elem.Height = 40
-		elem.Objects = {}
-		elem.Dragging = false
-
-		local label = Drawing.new("Text")
-		label.Text = text .. ": " .. tostring(default)
-		label.Color = Color3.fromRGB(255, 255, 255)
-		label.Size = 13
-		label.Center = false
-		label.Visible = true
-		table.insert(elem.Objects, label)
-
-		local bar = Drawing.new("Square")
-		bar.Color = Color3.fromRGB(50, 50, 50)
-		bar.Size = Vector2.new(elem.Width - 50, 8)
-		bar.Filled = true
-		bar.Visible = true
-		table.insert(elem.Objects, bar)
-
-		local fill = Drawing.new("Square")
-		local percent = (default - min) / (max - min)
-		fill.Color = Color3.fromRGB(100, 150, 255)
-		fill.Size = Vector2.new(percent * bar.Size.X, 8)
-		fill.Filled = true
-		fill.Visible = true
-		table.insert(elem.Objects, fill)
-
-		elem.UpdatePosition = function(self, topLeft)
-			label.Position = topLeft
-			bar.Position = topLeft + Vector2.new(50, 15)
-			fill.Position = bar.Position
-			-- При обновлении позиции пересчитываем fill.Size на основе текущего значения
-			local p = (self.Value - self.Min) / (self.Max - self.Min)
-			fill.Size = Vector2.new(p * bar.Size.X, 8)
-		end
-		elem.GetHeight = function(self) return self.Height end
-		elem.SetVisible = function(self, vis)
-			label.Visible = vis
-			bar.Visible = vis
-			fill.Visible = vis
-		end
-		elem.ProcessInput = function(self, mousePos, isDown, clicked, released)
-			if clicked and isInRect(mousePos, bar.Position, bar.Size) then
-				self.Dragging = true
-			end
-			if self.Dragging then
-				if not isDown then
-					self.Dragging = false
-				else
-					local percent = math.clamp((mousePos.X - bar.Position.X) / bar.Size.X, 0, 1)
-					self.Value = self.Min + (self.Max - self.Min) * percent
-					self.Value = math.floor(self.Value * 10) / 10
-					label.Text = text .. ": " .. tostring(self.Value)
-					fill.Size = Vector2.new(percent * bar.Size.X, 8)
-					callback(self.Value)
-				end
-			end
-		end
-		elem.Destroy = function(self) for _, d in ipairs(self.Objects) do d:Remove() end end
-
-		windowObj:AddElement(elem)
-		return elem
-	end
-
-	-- Выпадающий список
-	function windowObj:CreateDropdown(text, items, callback)
-		local elem = {}
-		elem.Type = "Dropdown"
-		elem.Items = items
-		elem.Selected = items[1] or ""
-		elem.Opened = false
-		elem.Width = size.X - 20
-		elem.Height = 30
-		elem.Objects = {}
-		elem.DropObjects = {} -- временные объекты выпадающего списка
-
-		local btn = Drawing.new("Square")
-		btn.Color = Color3.fromRGB(60, 60, 60)
-		btn.Size = Vector2.new(elem.Width, 30)
-		btn.Filled = true
-		btn.Visible = true
-		table.insert(elem.Objects, btn)
-
-		local label = Drawing.new("Text")
-		label.Text = text .. ": " .. elem.Selected
-		label.Color = Color3.fromRGB(255, 255, 255)
-		label.Size = 14
-		label.Center = false
-		label.Visible = true
-		table.insert(elem.Objects, label)
-
-		-- Внутренняя функция закрытия выпадающего списка
-		local function closeDropdown(self)
-			if self.Opened then
-				self.Opened = false
-				for _, d in ipairs(self.DropObjects) do
-					d:Remove()
-				end
-				self.DropObjects = {}
-			end
-		end
-
-		-- Открытие списка
-		local function openDropdown(self)
-			if self.Opened then return end
-			self.Opened = true
-			local yOff = btn.Position.Y + btn.Size.Y
-			for i, item in ipairs(self.Items) do
-				local itemBtn = Drawing.new("Square")
-				itemBtn.Color = Color3.fromRGB(50, 50, 50)
-				itemBtn.Size = Vector2.new(self.Width, 22)
-				itemBtn.Filled = true
-				itemBtn.Visible = true
-				itemBtn.Position = btn.Position + Vector2.new(0, 30 + (i-1)*22)
-				table.insert(self.DropObjects, itemBtn)
-
-				local itemTxt = Drawing.new("Text")
-				itemTxt.Text = item
-				itemTxt.Color = Color3.fromRGB(255, 255, 255)
-				itemTxt.Size = 14
-				itemTxt.Center = false
-				itemTxt.Visible = true
-				itemTxt.Position = itemBtn.Position + Vector2.new(5, 2)
-				table.insert(self.DropObjects, itemTxt)
-			end
-		end
-
-		elem.UpdatePosition = function(self, topLeft)
-			btn.Position = topLeft
-			label.Position = topLeft + Vector2.new(5, 5)
-			-- если открыто, переместить и дроп-объекты
-			if self.Opened then
-				closeDropdown(self)
-				openDropdown(self)
-			end
-		end
-		elem.GetHeight = function(self) return self.Height end
-		elem.SetVisible = function(self, vis)
-			btn.Visible = vis
-			label.Visible = vis
-			if not vis and self.Opened then
-				closeDropdown(self)
-			end
-		end
-		elem.ProcessInput = function(self, mousePos, isDown, clicked, released)
-			-- Клик по основной кнопке
-			if clicked and isInRect(mousePos, btn.Position, btn.Size) then
-				if self.Opened then
-					closeDropdown(self)
-				else
-					openDropdown(self)
-				end
-				return
-			end
-			-- Клик вне списка закрывает его
-			if clicked and self.Opened then
-				local anyDrop = false
-				for _, d in ipairs(self.DropObjects) do
-					if d.ClassName == "Square" and isInRect(mousePos, d.Position, d.Size) then
-						anyDrop = true
-						-- Определяем индекс элемента
-						local idx = math.floor((mousePos.Y - btn.Position.Y - 30) / 22) + 1
-						if idx >= 1 and idx <= #self.Items then
-							self.Selected = self.Items[idx]
-							label.Text = text .. ": " .. self.Selected
-							callback(self.Selected)
-							closeDropdown(self)
-						end
-						break
-					end
-				end
-				if not anyDrop then
-					closeDropdown(self)
-				end
-			end
-		end
-		elem.Destroy = function(self)
-			closeDropdown(self)
-			for _, d in ipairs(self.Objects) do d:Remove() end
-		end
-
-		windowObj:AddElement(elem)
-		return elem
-	end
-
-	-- Палитра цветов
-	function windowObj:CreateColorPicker(text, defaultColor, callback)
-		defaultColor = defaultColor or Color3.fromRGB(255, 255, 255)
-		local elem = {}
-		elem.Type = "ColorPicker"
-		elem.Color = defaultColor
-		elem.Width = size.X - 20
-		elem.Height = 170
-		elem.Objects = {}
-		elem.DraggingSV = false
-		elem.DraggingHue = false
-
-		-- Вспомогательные значения HSV
-		local h, s, v = 0, 1, 1 -- будем вычислять из defaultColor
-		-- Простой перевод Color3 -> HSV
-		local r, g, b = defaultColor.r, defaultColor.g, defaultColor.b
-		local cmax = math.max(r, g, b)
-		local cmin = math.min(r, g, b)
-		local delta = cmax - cmin
-		if delta == 0 then h = 0
-		elseif cmax == r then h = 60 * (((g - b) / delta) % 6)
-		elseif cmax == g then h = 60 * (((b - r) / delta) + 2)
-		else h = 60 * (((r - g) / delta) + 4)
-		end
-		if h < 0 then h = h + 360 end
-		s = cmax == 0 and 0 or delta / cmax
-		v = cmax
-
-		local label = Drawing.new("Text")
-		label.Text = text
-		label.Color = Color3.fromRGB(255, 255, 255)
-		label.Size = 13
-		label.Center = false
-		label.Visible = true
-		table.insert(elem.Objects, label)
-
-		local svBoxSize = Vector2.new(160, 120)
-		local svBox = Drawing.new("Square")
-		svBox.Color = Color3.fromRGB(255, 0, 0) -- будет перерисован линиями? Мы не можем динамически менять цвет каждого пикселя, поэтому используем градиент из линий. Упростим: отрисуем прямоугольник и Hue bar.
-		-- Вместо сложного градиента сделаем просто поле, где выбор позиции даёт S и V, а Hue задаётся отдельным слайдером.
-		-- Для визуализации используем наложение нескольких полупрозрачных квадратов. Это не идеально, но работает.
-		svBox.Size = svBoxSize
-		svBox.Filled = true
-		svBox.Visible = true
-		table.insert(elem.Objects, svBox)
-
-		-- Оттенок (Hue) слайдер
-		local hueBar = Drawing.new("Square")
-		hueBar.Color = Color3.fromRGB(255, 0, 0)
-		hueBar.Size = Vector2.new(160, 12)
-		hueBar.Filled = true
-		hueBar.Visible = true
-		table.insert(elem.Objects, hueBar)
-
-		-- Индикатор выбранного цвета
-		local preview = Drawing.new("Square")
-		preview.Color = defaultColor
-		preview.Size = Vector2.new(25, 25)
-		preview.Filled = true
-		preview.Visible = true
-		table.insert(elem.Objects, preview)
-
-		-- Крестик на SV-поле
-		local crossHair = Drawing.new("Line")
-		crossHair.Color = Color3.fromRGB(255, 255, 255)
-		crossHair.Thickness = 1
-		crossHair.Visible = true
-		table.insert(elem.Objects, crossHair)
-
-		-- Индикатор на Hue
-		local hueIndicator = Drawing.new("Square")
-		hueIndicator.Color = Color3.fromRGB(255, 255, 255)
-		hueIndicator.Size = Vector2.new(2, 14)
-		hueIndicator.Filled = true
-		hueIndicator.Visible = true
-		table.insert(elem.Objects, hueIndicator)
-
-		-- Обновление цвета
-		local function updateColor(self)
-			self.Color = hsvToColor3(h, s, v)
-			preview.Color = self.Color
-			-- Обновим визуал SV‑поля: просто зальём его цветом с максимальной насыщенностью и яркостью оттенка? Мы не можем сделать настоящий 2D градиент, поэтому просто покажем текущий оттенок с яркостью по вертикали? Сделаем фон основным цветом оттенка, а наложение покажет затемнение.
-			-- Для простоты не будем усложнять, оставим как есть.
-			callback(self.Color)
-		end
-
-		-- Позиционирование
-		elem.UpdatePosition = function(self, topLeft)
-			label.Position = topLeft
-			svBox.Position = topLeft + Vector2.new(0, 18)
-			hueBar.Position = topLeft + Vector2.new(0, 142)
-			preview.Position = topLeft + Vector2.new(170, 18)
-			-- Крестик
-			local svX = svBox.Position.X + s * svBoxSize.X
-			local svY = svBox.Position.Y + (1 - v) * svBoxSize.Y
-			crossHair.From = Vector2.new(svX - 3, svY)
-			crossHair.To = Vector2.new(svX + 3, svY)
-			-- Hue индикатор
-			hueIndicator.Position = hueBar.Position + Vector2.new((h / 360) * 160, -1)
-		end
-		elem.GetHeight = function(self) return self.Height end
-		elem.SetVisible = function(self, vis)
-			for _, d in ipairs(self.Objects) do d.Visible = vis end
-		end
-		elem.ProcessInput = function(self, mousePos, isDown, clicked, released)
-			-- SV поле
-			if clicked and isInRect(mousePos, svBox.Position, svBox.Size) then
-				self.DraggingSV = true
-			end
-			if self.DraggingSV then
-				if not isDown then
-					self.DraggingSV = false
-				else
-					s = math.clamp((mousePos.X - svBox.Position.X) / svBoxSize.X, 0, 1)
-					v = 1 - math.clamp((mousePos.Y - svBox.Position.Y) / svBoxSize.Y, 0, 1)
-					updateColor(self)
-					self.UpdatePosition(self, label.Position) -- обновить крестик
-				end
-			end
-			-- Hue ползунок
-			if clicked and isInRect(mousePos, hueBar.Position, hueBar.Size) then
-				self.DraggingHue = true
-			end
-			if self.DraggingHue then
-				if not isDown then
-					self.DraggingHue = false
-				else
-					h = math.clamp((mousePos.X - hueBar.Position.X) / 160, 0, 1) * 360
-					updateColor(self)
-					self.UpdatePosition(self, label.Position)
-				end
-			end
-		end
-		elem.Destroy = function(self) for _, d in ipairs(self.Objects) do d:Remove() end end
-
-		updateColor(elem)
-		windowObj:AddElement(elem)
-		return elem
-	end
-
-	-- Инициализация первой вкладки
-	windowObj:CreateTab("Main")
-
-	activeWindows[name] = windowObj
-	return windowObj
+-- Выбор вкладки
+function Library:SelectTab(name)
+    if self.currentTab then
+        self.tabs[self.currentTab].content.Visible = false
+    end
+    self.currentTab = name
+    self.tabs[name].content.Visible = true
+    -- Обновляем CanvasSize
+    self:UpdateCanvas()
 end
 
-return UILib
+-- Обновление размера прокрутки
+function Library:UpdateCanvas()
+    local maxY = 0
+    for _, tab in pairs(self.tabs) do
+        if tab.content.Visible then
+            local children = tab.content:GetChildren()
+            for _, child in ipairs(children) do
+                if child:IsA("GuiObject") and child.Visible then
+                    local pos = child.Position.Y.Offset + child.Size.Y.Offset
+                    if pos > maxY then maxY = pos end
+                end
+            end
+        end
+    end
+    self.contentContainer.CanvasSize = UDim2.new(0, 0, 0, maxY + 20)
+end
+
+-- Добавление кнопки
+function Library:AddButton(tabName, text, callback)
+    local tab = self.tabs[tabName]
+    if not tab then return end
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, -10, 0, 30)
+    btn.Position = UDim2.new(0, 5, 0, #tab.elements * 35 + 5)
+    btn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+    btn.Text = text
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.TextScaled = true
+    btn.Font = Enum.Font.SourceSans
+    btn.BorderSizePixel = 1
+    btn.BorderColor3 = Color3.fromRGB(0, 170, 255)
+    btn.Parent = tab.content
+    btn.MouseButton1Click:Connect(callback)
+    table.insert(tab.elements, btn)
+    self:UpdateCanvas()
+end
+
+-- Добавление ползунка (Slider)
+function Library:AddSlider(tabName, text, min, max, default, callback)
+    local tab = self.tabs[tabName]
+    if not tab then return end
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(1, -10, 0, 40)
+    frame.Position = UDim2.new(0, 5, 0, #tab.elements * 45 + 5)
+    frame.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    frame.BackgroundTransparency = 0
+    frame.BorderSizePixel = 1
+    frame.BorderColor3 = Color3.fromRGB(0, 170, 255)
+    frame.Parent = tab.content
+    
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(0.5, -5, 1, 0)
+    label.Position = UDim2.new(0, 5, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = text .. ": " .. tostring(default)
+    label.TextColor3 = Color3.fromRGB(255, 255, 255)
+    label.TextScaled = true
+    label.Font = Enum.Font.SourceSans
+    label.Parent = frame
+    
+    local slider = Instance.new("Frame")
+    slider.Size = UDim2.new(0.5, -10, 0, 10)
+    slider.Position = UDim2.new(0.5, 5, 0.5, -5)
+    slider.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+    slider.BackgroundTransparency = 0
+    slider.BorderSizePixel = 1
+    slider.BorderColor3 = Color3.fromRGB(0, 170, 255)
+    slider.Parent = frame
+    
+    local fill = Instance.new("Frame")
+    fill.Size = UDim2.new((default - min) / (max - min), 0, 1, 0)
+    fill.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
+    fill.BackgroundTransparency = 0
+    fill.BorderSizePixel = 0
+    fill.Parent = slider
+    
+    local value = default
+    local dragging = false
+    
+    local function updateValue(newValue)
+        newValue = math.clamp(newValue, min, max)
+        value = newValue
+        fill.Size = UDim2.new((value - min) / (max - min), 0, 1, 0)
+        label.Text = text .. ": " .. tostring(value)
+        if callback then callback(value) end
+    end
+    
+    slider.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+        end
+    end)
+    
+    slider.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = false
+        end
+    end)
+    
+    game:GetService("UserInputService").InputChanged:Connect(function(input)
+        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+            local pos = input.Position.X - slider.AbsolutePosition.X
+            local size = slider.AbsoluteSize.X
+            local percent = math.clamp(pos / size, 0, 1)
+            local val = min + (max - min) * percent
+            updateValue(val)
+        end
+    end)
+    
+    table.insert(tab.elements, frame)
+    self:UpdateCanvas()
+end
+
+-- Добавление бинда (Keybind)
+function Library:AddKeybind(tabName, text, defaultKey, callback)
+    local tab = self.tabs[tabName]
+    if not tab then return end
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(1, -10, 0, 35)
+    frame.Position = UDim2.new(0, 5, 0, #tab.elements * 40 + 5)
+    frame.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    frame.BackgroundTransparency = 0
+    frame.BorderSizePixel = 1
+    frame.BorderColor3 = Color3.fromRGB(0, 170, 255)
+    frame.Parent = tab.content
+    
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(0.6, -5, 1, 0)
+    label.Position = UDim2.new(0, 5, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = text
+    label.TextColor3 = Color3.fromRGB(255, 255, 255)
+    label.TextScaled = true
+    label.Font = Enum.Font.SourceSans
+    label.Parent = frame
+    
+    local keyBtn = Instance.new("TextButton")
+    keyBtn.Size = UDim2.new(0.4, -10, 0.8, 0)
+    keyBtn.Position = UDim2.new(0.6, 5, 0.1, 0)
+    keyBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    keyBtn.Text = defaultKey.Name or "None"
+    keyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    keyBtn.TextScaled = true
+    keyBtn.Font = Enum.Font.SourceSans
+    keyBtn.BorderSizePixel = 1
+    keyBtn.BorderColor3 = Color3.fromRGB(0, 170, 255)
+    keyBtn.Parent = frame
+    
+    local key = defaultKey
+    local isListening = false
+    
+    local function updateKey(newKey)
+        key = newKey
+        keyBtn.Text = newKey.Name or "None"
+        -- Здесь можно сохранить бинд в настройки
+    end
+    
+    keyBtn.MouseButton1Click:Connect(function()
+        if isListening then return end
+        isListening = true
+        keyBtn.Text = "..."
+        local connection
+        connection = game:GetService("UserInputService").InputBegan:Connect(function(input, gameProcessed)
+            if gameProcessed then return end
+            if input.KeyCode ~= Enum.KeyCode.Unknown then
+                updateKey(input.KeyCode)
+                isListening = false
+                connection:Disconnect()
+            end
+        end)
+    end)
+    
+    -- Обработка нажатия бинда (глобально)
+    game:GetService("UserInputService").InputBegan:Connect(function(input, gameProcessed)
+        if gameProcessed then return end
+        if input.KeyCode == key and callback then
+            callback()
+        end
+    end)
+    
+    table.insert(tab.elements, frame)
+    self:UpdateCanvas()
+end
+
+return Library
