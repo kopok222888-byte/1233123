@@ -1,4 +1,4 @@
--- UILib.lua (GameSense стиль, всё рабочее)
+-- UILib.lua (исправлено: ручной CanvasSize, обводка текста корректна)
 local UILib = {}
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
@@ -49,9 +49,10 @@ function UILib:CreateWindow(cfg)
         TextXAlignment = Enum.TextXAlignment.Left,
         Parent = topBar
     })
+    -- Обводка текста заголовка
     create("TextStroke", {Thickness = 1, Color = Color3.fromRGB(0, 0, 0), Parent = titleLabel})
 
-    -- Перетаскивание
+    -- Перетаскивание за заголовок
     local dragActive, dragStart, startPos
     topBar.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
@@ -72,7 +73,7 @@ function UILib:CreateWindow(cfg)
         end
     end)
 
-    -- Контейнер вкладок
+    -- Контейнер вкладок (левая панель)
     local tabBar = create("Frame", {
         Size = UDim2.new(0, 130, 1, -36),
         Position = UDim2.new(0, 0, 0, 36),
@@ -81,7 +82,7 @@ function UILib:CreateWindow(cfg)
         Parent = main
     })
     create("UIStroke", {Thickness = 1, Color = Color3.fromRGB(0, 0, 0), Parent = tabBar})
-    create("UIListLayout", {
+    local tabList = create("UIListLayout", {
         HorizontalAlignment = Enum.HorizontalAlignment.Center,
         SortOrder = Enum.SortOrder.LayoutOrder,
         Padding = UDim.new(0, 2),
@@ -127,16 +128,21 @@ function UILib:CreateWindow(cfg)
             ScrollBarThickness = 2,
             ScrollBarImageColor3 = accent,
             BorderSizePixel = 0,
-            AutomaticCanvasSize = Enum.AutomaticSize.Y,
+            CanvasSize = UDim2.new(0, 0, 0, 0),  -- будет обновляться вручную
             Parent = tabContent
         })
-        create("UIListLayout", {
+        local list = create("UIListLayout", {
             HorizontalAlignment = Enum.HorizontalAlignment.Center,
             SortOrder = Enum.SortOrder.LayoutOrder,
             Padding = UDim.new(0, 6),
             Parent = scroll
         })
         create("UIPadding", {PaddingTop = UDim.new(0, 8), PaddingBottom = UDim.new(0, 8), Parent = scroll})
+
+        -- Функция для обновления размера скролла после каждого добавления элемента
+        local function updateCanvas()
+            scroll.CanvasSize = UDim2.new(0, 0, 0, list.AbsoluteContentSize.Y + 16) -- +16 для паддингов
+        end
 
         -- Кнопка вкладки
         local tabBtn = create("TextButton", {
@@ -197,7 +203,6 @@ function UILib:CreateWindow(cfg)
             selectTab(tabData)
         end
 
-        -- Методы добавления элементов
         local tab = {}
 
         function tab:AddButton(text, callback)
@@ -214,6 +219,7 @@ function UILib:CreateWindow(cfg)
             create("UIStroke", {Thickness = 1, Color = Color3.fromRGB(0, 0, 0), Parent = btn})
             create("TextStroke", {Thickness = 1, Color = Color3.fromRGB(0, 0, 0), Parent = btn})
             btn.MouseButton1Click:Connect(callback)
+            updateCanvas()
             return btn
         end
 
@@ -287,6 +293,7 @@ function UILib:CreateWindow(cfg)
                     callback(val)
                 end
             end)
+            updateCanvas()
             return frame
         end
 
@@ -335,6 +342,7 @@ function UILib:CreateWindow(cfg)
                     callback(state)
                 end
             end)
+            updateCanvas()
             return frame
         end
 
@@ -394,6 +402,7 @@ function UILib:CreateWindow(cfg)
                 expanded = not expanded
                 dropdownFrame.Visible = expanded
             end)
+            updateCanvas()
             return frame
         end
 
@@ -452,6 +461,7 @@ function UILib:CreateWindow(cfg)
                     end
                 end
             end)
+            updateCanvas()
             return frame
         end
 
